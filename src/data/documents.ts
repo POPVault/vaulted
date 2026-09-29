@@ -6,10 +6,21 @@ import { db } from "@/db/client";
 import { documents, type Document } from "@/db/schema";
 import { write, type Executor } from "./executor";
 
-/** Root folder for gated documents. Files are only ever resolved under it. */
+/**
+ * Root folder for gated documents. Files are only ever resolved under it.
+ * DOCUMENTS_DIR overrides it (tests use ./data/test-documents); the default
+ * is ./private/documents. Relative values resolve from the working directory.
+ */
 export function documentsRoot(): string {
-  return path.resolve(process.cwd(), "private", "documents");
+  const configured = process.env.DOCUMENTS_DIR?.trim();
+  return path.resolve(process.cwd(), configured || path.join("private", "documents"));
 }
+
+/**
+ * Text that `pnpm seed --placeholder-docs` writes into every placeholder PDF.
+ * A file containing it is never a real offering document.
+ */
+export const PLACEHOLDER_MARKER = "PLACEHOLDER, NOT AN OFFERING DOCUMENT";
 
 /**
  * Resolves a stored filePath to an absolute path under the documents root.
@@ -99,11 +110,13 @@ export type DocumentFileCheck = {
   filePath: string;
   ok: boolean;
   reason: "missing_hash" | "missing_file" | "hash_mismatch" | null;
+  /** True when the verified file is a generated placeholder (see PLACEHOLDER_MARKER). */
+  placeholder: boolean;
 };
 
 /**
  * Checks every document of the offering on disk: the file must exist under
- * ./private/documents and its sha256 must equal the stored contentHash.
+ * the documents root and its sha256 must equal the stored contentHash.
  */
 export async function verifyDocumentFiles(
   offeringId: number,
@@ -114,14 +127,21 @@ export async function verifyDocumentFiles(
 }
 
 async function checkDocumentFile(doc: Document): Promise<DocumentFileCheck> {
-  const base = { documentId: doc.id, filePath: doc.filePath };
+  const base = { documentId: doc.id, filePath: doc.filePath, placeholder: false };
   if (!doc.contentHash) return { ...base, ok: false, reason: "missing_hash" };
-  const found = await hashDocumentFile(doc.filePath);
-  if (!found) return { ...base, ok: false, reason: "missing_file" };
-  if (found.contentHash !== doc.contentHash) {
+  const resolved = resolveDocumentPath(doc.filePath);
+  let bytes: Buffer;
+  try {
+    if (!resolved) throw new Error("invalid path");
+    bytes = await readFile(resolved);
+  } catch {
+    return { ...base, ok: false, reason: "missing_file" };
+  }
+  if (sha256Hex(bytes) !== doc.contentHash) {
     return { ...base, ok: false, reason: "hash_mismatch" };
   }
-  return { ...base, ok: true, reason: null };
+  const placeholder = bytes.includes(PLACEHOLDER_MARKER, 0, "latin1");
+  return { ...base, ok: true, reason: null, placeholder };
 }
 
 export type DocumentSyncResult = {

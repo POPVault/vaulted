@@ -127,3 +127,18 @@ test("14. two parallel requests for the last units: only one goes through", asyn
   for (const page of pages) await page.context().close();
 });
 
+
+test("16. closed phase still shows an existing request's wire instructions", async ({ page, context }) => {
+  const offering = await resetState({ phase: "open", unitsOffered: 1000 });
+  const investor = await newInvestor("Closed holder");
+  const sub = await insertSubscription({ investorId: investor.id, offeringId: offering.id, units: 5, accepted: true });
+  await setPhaseOrThrow(offering.id, "closed");
+  await loginAsInvestor(context, investor.id);
+
+  await page.goto("/invest/subscribe");
+  await expect(page).toHaveURL(/\/invest\/subscribe$/);
+  await expect(page.getByRole("heading", { level: 1, name: "Request received" })).toBeVisible();
+  await expect(page.getByText(sub.wireReference).first()).toBeVisible();
+  await expect(page.getByText("The offering is closed to new requests")).toBeVisible();
+  await expect(page.getByRole("heading", { name: "Offering closed" })).toHaveCount(0);
+});

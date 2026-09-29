@@ -21,6 +21,13 @@ export default async function SubscribePage() {
   if (!offering) redirect("/invest/enter");
   const investor = await requireInvestor(offering.id);
 
+  // An existing request keeps its instructions (wire, e-sign, next steps) in
+  // every phase. The phase gate only applies to new requests.
+  const subscription = await getSubscription(investor.id, offering.id);
+  if (subscription && subscription.cancelledAt === null) {
+    return <StatusView offering={offering} subscription={subscription} />;
+  }
+
   if (offering.phase === "preview") redirect("/invest");
   if (offering.phase === "closed") {
     return (
@@ -31,10 +38,6 @@ export default async function SubscribePage() {
     );
   }
 
-  const subscription = await getSubscription(investor.id, offering.id);
-  if (subscription && subscription.cancelledAt === null) {
-    return <StatusView offering={offering} subscription={subscription} />;
-  }
   if (subscription) {
     return (
       <Panel title="Request cancelled">
@@ -121,6 +124,9 @@ function StatusView({ offering, subscription }: { offering: Offering; subscripti
         <div className="flex flex-wrap items-center gap-3">
           <StatusBadge status={status} />
         </div>
+        {offering.phase === "closed" ? (
+          <p className="text-[15px] text-muted-foreground">The offering is closed to new requests.</p>
+        ) : null}
       </PageIntro>
 
       <div className="grid gap-12 lg:grid-cols-[minmax(0,1fr)_minmax(0,1.1fr)] lg:gap-16">

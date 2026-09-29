@@ -16,3 +16,4 @@
 14. Cancelled subscriptions cannot be replaced by a new one (one row per investor per offering); admin restores with uncancel.
 15. Admin notices are returned action state rather than URL params; revoke uses a two-step details confirm with no extra client code.
 16. Exports are GET route handlers and now share the admin rate limit (`admin:<ip>`, 120 per 15 minutes) with admin writes.
+17. The documents root is configurable via `DOCUMENTS_DIR` (default `./private/documents`); tests use `./data/test-documents`, created in global setup and deleted in teardown. Placeholder PDFs from `pnpm seed --placeholder-docs` carry the text "PLACEHOLDER, NOT AN OFFERING DOCUMENT", are flagged in the admin document panel, and cannot open an offering in production.

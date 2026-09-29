@@ -92,16 +92,23 @@ export async function getOfferingContent(
 
 /**
  * Changes the phase. Opening requires at least one document whose file exists
- * under ./private/documents and matches its stored contentHash.
+ * under the documents root and matches its stored contentHash. In production
+ * at least one of those must also be a real document, not a generated
+ * placeholder.
  */
 export async function setPhase(
   offeringId: number,
   phase: Phase,
-): Promise<Result<{ offering: Offering }, "not_found" | "documents_missing">> {
+): Promise<
+  Result<{ offering: Offering }, "not_found" | "documents_missing" | "documents_placeholder">
+> {
   if (phase === "open") {
-    const checks = await verifyDocumentFiles(offeringId);
-    if (!checks.some((c) => c.ok)) {
+    const verified = (await verifyDocumentFiles(offeringId)).filter((c) => c.ok);
+    if (verified.length === 0) {
       return { ok: false, code: "documents_missing" };
+    }
+    if (process.env.NODE_ENV === "production" && verified.every((c) => c.placeholder)) {
+      return { ok: false, code: "documents_placeholder" };
     }
   }
   const [row] = await write(() =>

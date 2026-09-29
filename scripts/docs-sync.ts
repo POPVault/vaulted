@@ -1,5 +1,6 @@
 // pnpm docs:sync: recompute contentHash and sizeBytes for the current
-// offering's documents from ./private/documents.
+// offering's documents from the documents root (DOCUMENTS_DIR, default
+// ./private/documents).
 import { loadEnvLocal } from "./lib/env";
 
 loadEnvLocal();
@@ -19,7 +20,7 @@ async function main() {
     const missing = rows.filter((r) => !r.ok).length;
     if (missing > 0) {
       console.log(
-        `${missing} missing. Drop PDFs named exactly as filePath into private/documents and run pnpm docs:sync.`,
+        `${missing} missing. Drop PDFs named exactly as filePath into ${documentsRoot()} and run pnpm docs:sync.`,
       );
     }
   } finally {

@@ -35,10 +35,12 @@ export async function adminLogin(
   formData: FormData,
 ): Promise<AdminLoginState> {
   const ip = clientIp(await headers());
-  // Both limits are consumed on every attempt; either being over rejects.
+  // Per-IP first. A blocked IP never touches the global counter, so one
+  // noisy address cannot lock everyone else out.
   const perIp = await consume(`admin-login:${ip}`, 10, WINDOW_MINUTES);
+  if (!perIp.allowed) return { error: GENERIC_ERROR };
   const global = await consume("admin-login:global", 100, WINDOW_MINUTES);
-  if (!perIp.allowed || !global.allowed) return { error: GENERIC_ERROR };
+  if (!global.allowed) return { error: GENERIC_ERROR };
 
   const parsed = adminLoginSchema.safeParse({ code: formData.get("code") });
   if (!parsed.success || !(await checkAdminCode(parsed.data.code))) {
@@ -98,11 +100,17 @@ export async function updatePhase(
 
   const result = await setPhase(offering.id, parsed.data.phase);
   if (!result.ok) {
-    return result.code === "documents_missing"
-      ? error(
-          "The offering cannot open until at least one document is on the server and verified. Add the PDFs to private/documents and run pnpm docs:sync.",
-        )
-      : error(NO_OFFERING);
+    if (result.code === "documents_missing") {
+      return error(
+        "The offering cannot open until at least one document is on the server and verified. Add the PDFs to the documents folder and run pnpm docs:sync.",
+      );
+    }
+    if (result.code === "documents_placeholder") {
+      return error(
+        "The offering cannot open on placeholder documents. Replace them with the real PDFs and run pnpm docs:sync.",
+      );
+    }
+    return error(NO_OFFERING);
   }
   return success(`Phase saved as ${parsed.data.phase}.`);
 }

@@ -166,7 +166,7 @@ async function main() {
     const schema = await import("@/db/schema");
     const { runMigrations } = await import("@/db/migrate");
     const { writeTransaction } = await import("@/data/executor");
-    const { documentsRoot, resolveDocumentPath } = await import("@/data/documents");
+    const { PLACEHOLDER_MARKER, documentsRoot, resolveDocumentPath } = await import("@/data/documents");
     const { createInvestor } = await import("@/data/investors");
     const { grantOfferingAccess } = await import("@/data/investorOfferings");
     const { syncAndReport } = await import("./lib/docs");
@@ -270,7 +270,8 @@ async function main() {
             d.title,
             `${source.name} (${source.code})`,
             `Version ${d.version}, ${d.date}`,
-            "Placeholder for local development only. Not an offering document.",
+            PLACEHOLDER_MARKER,
+            "For local development only.",
           ]),
         );
         written.push(d.filePath);
@@ -326,7 +327,7 @@ async function main() {
     for (const [k, v] of summary) console.log(`  ${k.padEnd(width)}  ${v}`);
     if (verified < docs.length) {
       console.log(
-        "\nDrop PDFs named exactly as filePath into private/documents and run pnpm docs:sync.",
+        `\nDrop PDFs named exactly as filePath into ${documentsRoot()} and run pnpm docs:sync.`,
       );
     }
     if (inviteUrl) console.log(`\nDemo invite (${DEMO_EMAIL}): ${inviteUrl}`);

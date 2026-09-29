@@ -12,6 +12,7 @@ type DocumentStatusProps = { documents: Document[]; checks: DocumentFileCheck[] 
 export function DocumentStatus({ documents, checks }: DocumentStatusProps) {
   const byId = new Map(checks.map((c) => [c.documentId, c]));
   const problems = checks.filter((c) => !c.ok).length;
+  const placeholders = checks.filter((c) => c.ok && c.placeholder).length;
 
   return (
     <div className="flex flex-col gap-3">
@@ -30,17 +31,28 @@ export function DocumentStatus({ documents, checks }: DocumentStatusProps) {
                 <span className="min-w-0 break-words">
                   {doc.title} <span className="text-muted-foreground">v{doc.version}</span>
                 </span>
-                <span className={ok ? "text-foreground" : "font-medium text-destructive"}>
-                  {ok ? "Verified" : REASONS[check?.reason ?? "missing_file"]}
-                </span>
+                {ok && check?.placeholder ? (
+                  <span className="font-medium text-destructive">Placeholder, not a real document</span>
+                ) : (
+                  <span className={ok ? "text-foreground" : "font-medium text-destructive"}>
+                    {ok ? "Verified" : REASONS[check?.reason ?? "missing_file"]}
+                  </span>
+                )}
               </li>
             );
           })}
         </ul>
       )}
-      {problems > 0 ? (
+      {placeholders > 0 ? (
+        <p className="text-[13px] font-medium text-destructive">
+          Placeholder PDFs are for local development only. Replace them with the real documents before
+          opening; production will not open on placeholders alone.
+        </p>
+      ) : null}
+      {problems > 0 || placeholders > 0 ? (
         <p className="text-[13px] text-muted-foreground">
-          Put each PDF in private/documents under its exact file name, then run{" "}
+          Put each PDF in the documents folder (private/documents unless DOCUMENTS_DIR is set) under its
+          exact file name, then run{" "}
           <code className="bg-muted px-1 font-mono text-[12px]">pnpm docs:sync</code>.
         </p>
       ) : null}

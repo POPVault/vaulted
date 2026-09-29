@@ -1,4 +1,5 @@
 import { expect, test } from "@playwright/test";
+import { verifyDocumentFiles } from "@/data/documents";
 import { getOfferingById, setPhase } from "@/data/offerings";
 import { applyStatusAction } from "@/data/subscriptions";
 import {
@@ -6,6 +7,7 @@ import {
   addUnverifiedDocument,
   ensureOffering,
   insertSubscription,
+  offeringA,
   newInvestor,
   resetState,
 } from "./helpers/db";
@@ -99,4 +101,26 @@ test("12. at most 35 accepted sophisticated investors (set_accepted and uncancel
   await addQuestionnaire(accredited.id, offering.id, "accredited");
   const accreditedSub = await insertSubscription({ investorId: accredited.id, offeringId: offering.id, units: 1 });
   expect((await applyStatusAction(accreditedSub.id, offering.id, "set_accepted", "")).ok).toBe(true);
+});
+
+test("17. seeded placeholder PDFs are flagged and cannot open an offering in production", async () => {
+  await resetState();
+  const offering = await offeringA();
+  const checks = await verifyDocumentFiles(offering.id);
+  expect(checks.length).toBeGreaterThan(0);
+  for (const check of checks) expect(check).toMatchObject({ ok: true, placeholder: true });
+
+  const env = process.env as Record<string, string | undefined>;
+  const previous = env.NODE_ENV;
+  env.NODE_ENV = "production";
+  try {
+    expect(await setPhase(offering.id, "open")).toEqual({ ok: false, code: "documents_placeholder" });
+  } finally {
+    env.NODE_ENV = previous;
+  }
+  expect((await getOfferingById(offering.id))?.phase).toBe("preview");
+
+  // Outside production the placeholders still open the offering for local work.
+  expect((await setPhase(offering.id, "open")).ok).toBe(true);
+  await resetState();
 });

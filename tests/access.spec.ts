@@ -1,6 +1,10 @@
 import { expect, test } from "@playwright/test";
+import { eq } from "drizzle-orm";
+import { db } from "@/db/client";
+import { rateLimits } from "@/db/schema";
 import { listDocuments } from "@/data/documents";
 import { revokeInvestor } from "@/data/investors";
+import { consume } from "@/data/rateLimit";
 import { ensureOffering, insertSubscription, newInvestor, offeringA, resetState } from "./helpers/db";
 import { ADMIN_COOKIE, INVESTOR_COOKIE, investorCookieValue, loginAsInvestor, setCookie } from "./helpers/session";
 
@@ -106,3 +110,40 @@ test("8. investors only see their own records and offerings they were invited to
   await expect(otherPage.locator("body")).not.toContainText(offering.name);
   await other.close();
 });
+
+test("15. a rate-limited IP does not lock others out or grow the global counter", async ({ browser }) => {
+  const offering = await offeringA();
+  const investor = await newInvestor("Second IP");
+  const ipA = "203.0.113.10";
+  const ipB = "203.0.113.20";
+
+  // Exhaust IP A's per-IP budget through the data layer (limit 10 per window).
+  for (let i = 0; i < 10; i++) await consume(`token:${ipA}`, 10, 15);
+  const globalBefore = await rateLimitCount("token:global");
+
+  // With no proxy in front of the test server, a single x-forwarded-for
+  // entry is the rightmost one, which is what the app trusts.
+  const contextA = await browser.newContext({ extraHTTPHeaders: { "x-forwarded-for": ipA } });
+  for (let i = 0; i < 5; i++) {
+    const blocked = await contextA.request.get(`/invest/i/${investor.inviteToken}`, { maxRedirects: 0 });
+    expect(blocked.status()).toBe(303);
+    expect(blocked.headers()["location"]).toBe("/invest/enter?e=1");
+  }
+  expect((await contextA.cookies()).some((c) => c.name === INVESTOR_COOKIE)).toBe(false);
+  await contextA.close();
+  expect(await rateLimitCount("token:global")).toBe(globalBefore);
+
+  const contextB = await browser.newContext({ extraHTTPHeaders: { "x-forwarded-for": ipB } });
+  const page = await contextB.newPage();
+  await page.goto(`/invest/i/${investor.inviteToken}`);
+  await expect(page).toHaveURL(/\/invest$/);
+  await expect(page.getByRole("heading", { level: 1, name: offering.name })).toBeVisible();
+  expect((await contextB.cookies()).some((c) => c.name === INVESTOR_COOKIE)).toBe(true);
+  await contextB.close();
+  expect(await rateLimitCount("token:global")).toBe(globalBefore + 1);
+});
+
+async function rateLimitCount(key: string): Promise<number> {
+  const [row] = await db.select().from(rateLimits).where(eq(rateLimits.key, key));
+  return row?.count ?? 0;
+}

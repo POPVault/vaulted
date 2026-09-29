@@ -30,7 +30,7 @@ import { createInvestor } from "@/data/investors";
 import { getCurrentOffering, getOfferingByCode, setPhase } from "@/data/offerings";
 import { createQuestionnaire } from "@/data/questionnaires";
 
-/** Every file name the tests write under ./private/documents starts with this. */
+/** Every file name the tests write under DOCUMENTS_DIR starts with this. */
 export const TEST_FILE_PREFIX = "e2e-";
 
 let counter = 0;
@@ -222,7 +222,7 @@ export async function ensureOffering(code: string, documentFile?: string): Promi
   return offering;
 }
 
-/** Writes a file under ./private/documents. The name must start with TEST_FILE_PREFIX. */
+/** Writes a file under DOCUMENTS_DIR. The name must start with TEST_FILE_PREFIX. */
 export function writeTestFile(fileName: string, content: string): void {
   const file = testFilePath(fileName);
   writeFileSync(file, `%PDF-1.4\n% ${content}\n%%EOF\n`);

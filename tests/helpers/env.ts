@@ -9,6 +9,8 @@ export const TEST_ENV = {
   DATABASE_PATH: "./data/test.db",
   SESSION_SECRET: "playwright-session-secret-0123456789-abcdefghij",
   ADMIN_CODE: "playwright-admin-code",
+  // Tests never write into the real ./private/documents.
+  DOCUMENTS_DIR: "./data/test-documents",
 } as const;
 
 for (const [key, value] of Object.entries(TEST_ENV)) process.env[key] = value;

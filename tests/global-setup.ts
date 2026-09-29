@@ -1,7 +1,12 @@
 import { spawnSync, type SpawnSyncReturns } from "node:child_process";
-import { rmSync } from "node:fs";
+import { mkdirSync, rmSync } from "node:fs";
 import path from "node:path";
 import { BASE_URL, TEST_ENV } from "./helpers/env";
+
+/** The documents root the tests use (never ./private/documents). */
+export function testDocumentsDir(): string {
+  return path.resolve(TEST_ENV.DOCUMENTS_DIR);
+}
 
 /** The test database and its WAL side files. */
 export function removeTestDatabase(): void {
@@ -14,9 +19,11 @@ function check(label: string, result: SpawnSyncReturns<string>): void {
 }
 
 export default async function globalSetup(): Promise<void> {
-  // Fresh database: migrations and the offering come from the real seed script
-  // (placeholder PDFs are written to ./private/documents only if missing).
+  // Fresh database and documents folder: migrations and the offering come from
+  // the real seed script, which writes placeholder PDFs into DOCUMENTS_DIR.
   removeTestDatabase();
+  rmSync(testDocumentsDir(), { recursive: true, force: true });
+  mkdirSync(testDocumentsDir(), { recursive: true });
   const seed = spawnSync("pnpm", ["seed", "--placeholder-docs"], {
     env: { ...process.env, ...TEST_ENV },
     encoding: "utf8",

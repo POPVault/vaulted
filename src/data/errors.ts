@@ -7,6 +7,7 @@ export type DataErrorCode =
   | "acknowledgment_required"
   | "documents_updated"
   | "documents_missing"
+  | "documents_placeholder"
   | "sold_out"
   | "invalid_transition"
   | "sophisticated_cap"

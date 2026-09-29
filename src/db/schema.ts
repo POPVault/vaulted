@@ -144,7 +144,7 @@ export const documents = sqliteTable(
       .notNull()
       .references(() => offerings.id, { onDelete: "cascade" }),
     title: text("title").notNull(),
-    // Relative to ./private/documents. Never client supplied.
+    // Relative to the documents root (DOCUMENTS_DIR, default ./private/documents). Never client supplied.
     filePath: text("file_path").notNull(),
     version: text("version").notNull(),
     date: text("date").notNull(),

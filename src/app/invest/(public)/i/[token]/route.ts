@@ -24,10 +24,12 @@ function failure(): NextResponse {
 
 export async function GET(request: NextRequest, ctx: RouteContext<"/invest/i/[token]">) {
   const ip = clientIp(request.headers);
-  // Both limits are consumed on every attempt; either being over rejects.
+  // Per-IP first. A blocked IP never touches the global counter, so one
+  // noisy address cannot lock everyone else out.
   const perIp = await consume(`token:${ip}`, 10, WINDOW_MINUTES);
+  if (!perIp.allowed) return failure();
   const global = await consume("token:global", 300, WINDOW_MINUTES);
-  if (!perIp.allowed || !global.allowed) return failure();
+  if (!global.allowed) return failure();
 
   const { token } = await ctx.params;
   if (!isInviteToken(token)) return failure();
