@@ -8,21 +8,34 @@ import { FundingProgress } from "@/components/invest/funding-progress";
 import { FunnelDots } from "@/components/invest/funnel-dots";
 import { StatBlock } from "@/components/invest/stat-block";
 import { PhaseBadge, StatusBadge } from "@/components/invest/status-badge";
+import { findCurrentOffering } from "@/data/offerings";
+import { requireInvestor } from "@/lib/session";
 
-// Temporary theme check. Replaced by the offering page in piece 6. Sample values only.
-export default function InvestPage() {
+// Temporary. Replaced by the offering page in piece 6. Everything below the
+// heading is a theme check with sample values only.
+export default async function InvestPage() {
+  const offering = await findCurrentOffering();
+  if (!offering) {
+    return (
+      <div className="shell py-16 md:py-24">
+        <h1 className="text-5xl leading-none md:text-7xl">No offering yet</h1>
+      </div>
+    );
+  }
+  await requireInvestor(offering.id);
+
   return (
     <div className="shell flex flex-col gap-16 py-16 md:py-24">
       <section className="flex flex-col gap-4">
-        <p className="eyebrow">Theme check</p>
-        <h1 className="text-5xl leading-none md:text-7xl">Sample collection</h1>
-        <p className="max-w-[36em] text-muted-foreground">
-          Temporary page for checking tokens, type and components. Values below are samples.
-        </p>
+        <h1 className="text-5xl leading-none md:text-7xl">{offering.name}</h1>
         <div className="flex flex-wrap gap-2">
-          <PhaseBadge phase="preview" />
-          <PhaseBadge phase="open" />
-          <PhaseBadge phase="closed" />
+          <PhaseBadge phase={offering.phase} />
+        </div>
+      </section>
+
+      <section className="flex flex-col gap-4">
+        <p className="eyebrow">Theme check (sample values)</p>
+        <div className="flex flex-wrap gap-2">
           <StatusBadge status="none" />
           <StatusBadge status="requested" />
           <StatusBadge status="funded" />

@@ -21,13 +21,19 @@ import { write } from "./executor";
  * is the single place to change when there are several.
  */
 export async function getCurrentOffering(): Promise<Offering> {
+  const row = await findCurrentOffering();
+  if (!row) throw new DataError("not_found", "No offering has been seeded");
+  return row;
+}
+
+/** Same as getCurrentOffering, but null instead of throwing when none exists. */
+export async function findCurrentOffering(): Promise<Offering | null> {
   const [row] = await db
     .select()
     .from(offerings)
     .orderBy(asc(offerings.id))
     .limit(1);
-  if (!row) throw new DataError("not_found", "No offering has been seeded");
-  return row;
+  return row ?? null;
 }
 
 export async function getOfferingById(id: number): Promise<Offering | null> {

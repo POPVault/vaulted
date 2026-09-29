@@ -13,7 +13,6 @@ const linkClass =
 
 export function InvestNav() {
   const pathname = usePathname();
-  if (pathname === "/invest/enter") return null;
 
   return (
     <nav aria-label="Investor" className="flex items-center gap-x-5 md:gap-x-8">
