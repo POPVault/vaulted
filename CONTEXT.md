@@ -52,3 +52,16 @@ Rally (rallyrd.com) for the offering page: stats block, story, comps, FAQ, one b
 - Frameworks, build steps, npm dependencies.
 - Changes to existing files in functions/, _headers, or schema.sql.
 - Marketing, sharing, or anything visible on the public site.
+
+## Stack
+- Next.js App Router, TypeScript strict, Tailwind, shadcn/ui components. Server components by default; client components only where interaction requires it.
+- Database: SQLite file at ./data/vaulted.db (gitignored) through Drizzle ORM, schema in one place, migrations generated with drizzle-kit and committed. All database access in a small data layer so switching to Postgres later is a driver change, not a rewrite. No raw SQL in pages.
+- Auth: personal invite links (/invest/i/<token>). A valid token sets a signed, httpOnly session cookie (7-day expiry, signed with a secret from .env.local) tied to that investor. Middleware protects /invest and /admin. Admin is a separate admin code and cookie. Rate-limit token attempts. The session layer is designed so it can be replaced by a hosted auth provider later.
+- All writes go through server actions or route handlers with Zod validation. No client-side trust.
+- Documents (PDFs) live in ./private/documents (gitignored except a placeholder) and are served only by a route handler that checks the session. Images in /public.
+- Design tokens in the Tailwind theme taken from ../vaulted-landing's stylesheet (cream, green, serif headings, same fonts via next/font). shadcn components themed to those tokens once, reused everywhere. No one-off styling.
+- Playwright smoke tests: unauthenticated user cannot see offering content, subscribe locked until documents acknowledged, units capped at remaining, admin toggle updates My holdings.
+- Every /invest page gets noindex, nofollow. No share, refer, or copy-link buttons anywhere. Confidentiality footer legend and log out link on every page.
+- Timestamp and IP recorded on every acknowledgment, questionnaire, interest, and subscription.
+- Commit after each working piece with clear messages; push to origin main after each commit.
+- KISS. Never invent deal numbers; placeholders where CONTEXT.md marks something open.
