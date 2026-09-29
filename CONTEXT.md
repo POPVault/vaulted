@@ -49,8 +49,8 @@ Rally (rallyrd.com) for the offering page: stats block, story, comps, FAQ, one b
 ## What reviewers should not suggest
 - Accounts, passwords, OAuth, magic-link email login.
 - Payment processing, escrow, KYC or accreditation verification services.
-- Frameworks, build steps, npm dependencies.
-- Changes to existing files in functions/, _headers, or schema.sql.
+- Swapping the stack in the Stack section (Next.js, Drizzle, SQLite, shadcn) or adding dependencies beyond what a feature needs.
+- Changes to the marketing site in ../vaulted-landing.
 - Marketing, sharing, or anything visible on the public site.
 
 ## Stack
