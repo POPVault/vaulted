@@ -26,6 +26,10 @@ async function check(request: NextRequest, pathname: string): Promise<NextRespon
     if (ADMIN_PUBLIC.test(pathname)) return null;
     const session = await verifyToken(request.cookies.get(ADMIN_COOKIE)?.value, "admin");
     if (session?.sub === "admin") return null;
+    // Exports are downloads, not pages: answer 401 rather than a login redirect.
+    if (pathname.startsWith("/admin/export/")) {
+      return new NextResponse("Unauthorized", { status: 401, headers: { "Cache-Control": "no-store" } });
+    }
     return NextResponse.redirect(new URL("/admin", request.url));
   }
   return null;

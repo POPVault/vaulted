@@ -1,28 +1,19 @@
 import type { Metadata } from "next";
 import type { ReactNode } from "react";
-import Image from "next/image";
+import { AdminHeader } from "@/components/admin/admin-header";
+import { getAdminOrNull } from "@/lib/admin-session";
 
 export const metadata: Metadata = {
   title: "Vaulted admin",
   robots: { index: false, follow: false },
 };
 
-export default function AdminLayout({ children }: { children: ReactNode }) {
+export default async function AdminLayout({ children }: { children: ReactNode }) {
+  const admin = await getAdminOrNull();
+
   return (
     <>
-      <header className="border-b border-line py-5">
-        <div className="shell flex items-center gap-4">
-          <Image
-            src="/brand/logo-black.png"
-            alt="Vaulted"
-            width={1400}
-            height={215}
-            priority
-            className="h-auto w-[112px]"
-          />
-          <p className="eyebrow">Admin</p>
-        </div>
-      </header>
+      <AdminHeader loggedIn={admin !== null} />
       <main className="flex-1">{children}</main>
     </>
   );
