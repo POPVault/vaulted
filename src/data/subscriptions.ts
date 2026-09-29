@@ -237,12 +237,14 @@ async function sophisticatedAcceptedCount(
 }
 
 /**
- * Applies one admin status action: read, validate, cap and capacity checks,
+ * Applies one admin status action to a subscription in `offeringId` (a
+ * subscription from any other offering is not_found): read, validate, cap and capacity checks,
  * update, and statusLog append, all in one transaction. Refused actions are
  * not logged.
  */
 export async function applyStatusAction(
   subscriptionId: number,
+  offeringId: number,
   action: StatusAction,
   ip: string,
 ): Promise<Result<{ subscription: Subscription }, StatusActionError>> {
@@ -252,7 +254,12 @@ export async function applyStatusAction(
     const [sub] = await tx
       .select()
       .from(subscriptions)
-      .where(eq(subscriptions.id, subscriptionId))
+      .where(
+        and(
+          eq(subscriptions.id, subscriptionId),
+          eq(subscriptions.offeringId, offeringId),
+        ),
+      )
       .limit(1);
     if (!sub) return fail("not_found");
 

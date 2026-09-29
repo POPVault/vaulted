@@ -20,6 +20,13 @@ async function check(request: NextRequest, pathname: string): Promise<NextRespon
     if (INVEST_PUBLIC.test(pathname)) return null;
     const session = await verifyToken(request.cookies.get(INVESTOR_COOKIE)?.value, "investor");
     if (session) return null;
+    // Documents are an API, not pages: answer 401 rather than a redirect to enter.
+    if (pathname.startsWith("/invest/documents/")) {
+      return NextResponse.json(
+        { error: "unauthorized" },
+        { status: 401, headers: { "Cache-Control": "no-store" } },
+      );
+    }
     return NextResponse.redirect(new URL("/invest/enter", request.url));
   }
   if (pathname === "/admin" || pathname.startsWith("/admin/")) {

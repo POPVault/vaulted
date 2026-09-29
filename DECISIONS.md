@@ -10,3 +10,9 @@
 8. The site has no error color, so one brick red (#9b2c1f) was added for form errors and destructive states. It is the only color outside the marketing tokens and is never used for status, which keeps gold-on-light as the single accent.
 9. shadcn's "muted" is a background token (cream-deep); muted text is text-muted-foreground. Dark mode is disabled by tying dark variants to a class that is never set.
 10. Next 16's agentRules feature injected a block into AGENTS.md on first dev run; it is disabled in next.config.ts so AGENTS.md stays the two lines the brief specifies.
+11. SQLite write serialization: the libsql driver blocks the event loop while waiting for the write lock, so two concurrent write transactions deadlocked in one process. All data-layer writes now pass through a small in-process write queue (src/data/executor.ts). It disappears with a move to Postgres.
+12. Opening an offering requires at least one verified document rather than all of them; acknowledgment requires every document file to verify. Charles should run `pnpm docs:sync` after dropping the final PDFs.
+13. Re-seeding overwrites closeDate from the source content; set the close date in admin only after the final seed, or set it in the source file.
+14. Cancelled subscriptions cannot be replaced by a new one (one row per investor per offering); admin restores with uncancel.
+15. Admin notices are returned action state rather than URL params; revoke uses a two-step details confirm with no extra client code.
+16. Exports are GET route handlers and now share the admin rate limit (`admin:<ip>`, 120 per 15 minutes) with admin writes.

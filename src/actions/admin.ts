@@ -9,7 +9,13 @@ import { createInvestor, getInvestorById, hasOfferingAccess, revokeInvestor } fr
 import { findCurrentOffering, setCloseDate, setPhase } from "@/data/offerings";
 import { consume } from "@/data/rateLimit";
 import { applyStatusAction, type StatusActionError } from "@/data/subscriptions";
-import { checkAdminCode, createAdminSessionCookie, getAdminOrNull } from "@/lib/admin-session";
+import {
+  ADMIN_LIMIT,
+  ADMIN_WINDOW_MINUTES,
+  checkAdminCode,
+  createAdminSessionCookie,
+  getAdminOrNull,
+} from "@/lib/admin-session";
 import { clientIp } from "@/lib/ip";
 import {
   adminLoginSchema,
@@ -53,7 +59,6 @@ export type AdminActionState = {
   values?: Record<string, string>;
 };
 
-const ADMIN_WRITE_LIMIT = 120;
 const SESSION_ERROR = "Your admin session has ended. Reload the page and log in again.";
 const RATE_ERROR = "Too many changes in a short time. Wait a few minutes and try again.";
 const NO_OFFERING = "There is no offering yet. Run pnpm seed first.";
@@ -64,7 +69,7 @@ type Guard = { ok: true; ip: string } | { ok: false; state: AdminActionState };
 async function guard(): Promise<Guard> {
   if (!(await getAdminOrNull())) return { ok: false, state: error(SESSION_ERROR) };
   const ip = clientIp(await headers());
-  const limit = await consume(`admin:${ip}`, ADMIN_WRITE_LIMIT, WINDOW_MINUTES);
+  const limit = await consume(`admin:${ip}`, ADMIN_LIMIT, ADMIN_WINDOW_MINUTES);
   if (!limit.allowed) return { ok: false, state: error(RATE_ERROR) };
   return { ok: true, ip };
 }
@@ -202,7 +207,7 @@ export async function investorRowAction(
   }
 
   const { action, subscriptionId } = parsed.data;
-  const result = await applyStatusAction(subscriptionId, action, check.ip);
+  const result = await applyStatusAction(subscriptionId, offering.id, action, check.ip);
   if (!result.ok) return error(STATUS_REFUSED[result.code]);
   return success(STATUS_DONE[action]);
 }

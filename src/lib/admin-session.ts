@@ -57,3 +57,7 @@ export async function checkAdminCode(submitted: string): Promise<boolean> {
   ]);
   return timingSafeEqual(new Uint8Array(a), new Uint8Array(b));
 }
+
+/** The `admin:<ip>` limit shared by admin writes and CSV exports. */
+export const ADMIN_LIMIT = 120;
+export const ADMIN_WINDOW_MINUTES = 15;

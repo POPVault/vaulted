@@ -1,7 +1,9 @@
 import { exportInvestorsRows } from "@/data/admin";
 import { findCurrentOffering } from "@/data/offerings";
-import { getAdminOrNull } from "@/lib/admin-session";
+import { consume } from "@/data/rateLimit";
+import { ADMIN_LIMIT, ADMIN_WINDOW_MINUTES, getAdminOrNull } from "@/lib/admin-session";
 import { csvResponse, toCsv, unauthorized } from "@/lib/csv";
+import { clientIp } from "@/lib/ip";
 
 export const dynamic = "force-dynamic";
 
@@ -48,8 +50,12 @@ const COLUMNS = [
   "sub_ip",
 ];
 
-export async function GET() {
+export async function GET(request: Request) {
   if (!(await getAdminOrNull())) return unauthorized();
+  const limit = await consume(`admin:${clientIp(request.headers)}`, ADMIN_LIMIT, ADMIN_WINDOW_MINUTES);
+  if (!limit.allowed) {
+    return new Response("Too many requests", { status: 429, headers: { "Cache-Control": "no-store" } });
+  }
   const offering = await findCurrentOffering();
   if (!offering) return new Response("No offering", { status: 404 });
 

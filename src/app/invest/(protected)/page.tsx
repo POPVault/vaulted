@@ -46,7 +46,9 @@ function changedSince(ack: Acknowledgment, docs: Document[]): Set<number> {
   return changed;
 }
 
-export default async function OfferingPage() {
+export default async function OfferingPage({ searchParams }: PageProps<"/invest">) {
+  const { notice } = await searchParams;
+  const showDocumentsNotice = notice === "documents";
   const current = await findCurrentOffering();
   if (!current) redirect("/invest/enter");
   const investor = await requireInvestor(current.id);
@@ -203,6 +205,11 @@ export default async function OfferingPage() {
         className="border-t border-line"
       >
         <div className="flex flex-col gap-8">
+          {showDocumentsNotice ? (
+            <p role="status" className="border-l-2 border-accent bg-card py-3 pr-4 pl-4 text-[15px]">
+              Your questionnaire is saved. Confirm you have read the documents below to continue to subscribe.
+            </p>
+          ) : null}
           {outdated ? (
             <p role="status" className="border-l-2 border-accent bg-card py-3 pr-4 pl-4 text-[15px]">
               The documents have been updated since you last confirmed. Please review and confirm again.
