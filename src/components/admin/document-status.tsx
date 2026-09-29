@@ -46,7 +46,8 @@ export function DocumentStatus({ documents, checks }: DocumentStatusProps) {
       {placeholders > 0 ? (
         <p className="text-[13px] font-medium text-destructive">
           Placeholder PDFs are for local development only. Replace them with the real documents before
-          opening; production will not open on placeholders alone.
+          opening. In production the offering will not open, and investors cannot confirm documents or
+          subscribe, while any document is a placeholder.
         </p>
       ) : null}
       {problems > 0 || placeholders > 0 ? (

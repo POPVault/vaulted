@@ -13,7 +13,7 @@ A private, invite-only website for Vaulted's first offering. Each investor gets 
 - **Subscribe.** Only possible when the offering is Open, the questionnaire is done and the current documents are acknowledged. The investor picks a number of units (never more than are left), and the page shows the total, the e-sign link, the wire instructions and a personal wire reference (offering code plus the investor's 6-character code, for example `MM01-AB12CD`). An investor who already has a request (one that is not cancelled) always sees their wire details and e-sign link on this page, even after the offering is Closed, so they can still finish signing and wiring.
 - **My holdings.** Shows the investor's subscription, its status (requested, accepted, signed, funded) and their wire reference.
 - **Admin dashboard** (`/admin`, protected by the admin code):
-  - **Phase:** Preview, Open or Closed, plus the close date. Open is refused until at least one document is verified on the server.
+  - **Phase:** Preview, Open or Closed, plus the close date. Open is refused until every document is verified on the server (and, in production, none is a placeholder).
   - **Investors:** add a person with name, email and a note on how we know them; see each person's personal link, progress and status.
   - **Status actions:** Accept, Mark signed, Mark funded, the matching Undo buttons, Cancel and Restore. Steps must go in order. The 35 non-accredited investor limit is enforced when accepting.
   - **Totals:** units sold and remaining, units that would go to the partner if closed now, non-accredited count against the limit of 35, dollars committed and received, interest, and investors by state (for state notice filings).
@@ -76,7 +76,7 @@ There are also site-wide caps: 300 invite link attempts and 100 admin login atte
   - Deletes and reloads the items (gallery), comparable sales, documents list and updates.
   - Keeps the **phase** as it is.
   - Never touches investors, questionnaires, acknowledgments, interest or subscriptions.
-  - Copies the gallery images from `../vaulted-landing/invest/images/` into `public/offerings/<code>/`.
+  - Copies every image the items in `offering.json` point to (svg, jpg, jpeg, png, webp or avif) from `../vaulted-landing/invest/images/` into `public/offerings/<code>/`. To copy from a different folder, add `--images <folder>`, for example `pnpm seed --images ~/Desktop/final-photos`. An image that is not in that folder but is already in `public/offerings/<code>/` is kept. If an image is in neither place, the seed stops before changing anything and lists the missing file names.
   - Checks each document file and prints a summary.
 
 Where the content comes from today: `../vaulted-landing/functions/invest/_content/offering.json` (and `updates.json` next to it for the updates list). To change anything investors read, edit that file, then run `pnpm seed`. No code change is needed.
@@ -97,9 +97,9 @@ Where the content comes from today: `../vaulted-landing/functions/invest/_conten
 2. Put each PDF into `private/documents/` (or the folder set in `DOCUMENTS_DIR`, section 2) with exactly that name.
 3. Run `pnpm docs:sync`. It fingerprints each file and prints which ones are verified and which are missing.
 4. In `/admin`, the **Documents on the server** box shows each document as **Verified**, **File missing**, **File missing or not synced** or **File changed since last sync**.
-5. The offering cannot be set to Open until at least one document is verified. Investors cannot confirm the documents until every document is verified, so make sure all of them show Verified before opening.
+5. The offering cannot be set to Open until every document is verified. Investors cannot confirm the documents or subscribe unless every document is verified either.
 
-**Placeholder PDFs.** The stand-in PDFs made by `pnpm seed --placeholder-docs` contain the text "PLACEHOLDER, NOT AN OFFERING DOCUMENT". In admin they show as **Placeholder, not a real document**. On the live server (production), the offering cannot be set to Open while every verified document is a placeholder. They are only for testing on your own computer.
+**Placeholder PDFs.** The stand-in PDFs made by `pnpm seed --placeholder-docs` contain the text "PLACEHOLDER, NOT AN OFFERING DOCUMENT". In admin they show as **Placeholder, not a real document**. **All documents must be real in production.** On the live server (production), if even one document is a placeholder, the offering cannot be set to Open, investors cannot confirm the documents, and nobody can subscribe, even if the offering was already set to Open earlier. Investors see a plain message that the final documents are not ready yet. Placeholders are only for testing on your own computer.
 
 Action needed on this computer: the three placeholder PDFs now in `private/documents/` (`offering-memorandum.pdf`, `operating-agreement.pdf`, `subscription-agreement.pdf`) were made before this marker text existed, so the app cannot tell they are placeholders. Either delete those three files and run `pnpm seed --placeholder-docs` again, which makes new, marked ones and fingerprints them, or replace them with the real PDFs and run `pnpm docs:sync`.
 
@@ -109,7 +109,7 @@ The `private/documents` folder is ignored by git; the PDFs must be copied to the
 
 ## 7. Tests, lint, typecheck
 
-- `pnpm test` runs the browser tests. There are 17 tests. It starts its own copy of the site on port 3100 using its own database, `data/test.db`, its own documents folder, `data/test-documents`, and its own fixed secrets, so it never touches your real data or your real PDFs. The test documents folder is created at the start of the run and deleted at the end. Do not run `pnpm dev` in the same folder at the same time: both use Next.js's build folder and will interfere. Stop `pnpm dev` first. The tests take a few minutes and run one at a time.
+- `pnpm test` runs the browser tests. There are 18 tests. It starts its own copy of the site on port 3100 using its own database, `data/test.db`, its own documents folder, `data/test-documents`, and its own fixed secrets, so it never touches your real data or your real PDFs. The test documents folder is created at the start of the run and deleted at the end. Do not run `pnpm dev` in the same folder at the same time: both use Next.js's build folder and will interfere. Stop `pnpm dev` first. The tests take a few minutes and run one at a time.
 - `pnpm lint` checks the code for common mistakes.
 - `pnpm typecheck` checks the code's types.
 
@@ -143,9 +143,9 @@ None of these were invented. Each is still "TBD" or example content and must be 
 | Hold period | `offering.json`: `key_terms` "Expected hold" |
 | Management fee amount | `offering.json`: `key_terms` "Management fee" |
 | Close date | `offering.json`: `stats.close_date` as `YYYY-MM-DD`, or in admin (see the re-seed warning in section 4) |
-| Real items and images | `offering.json`: `items` (title, photographer, year, description, estimate, image, caption). Image files go in `../vaulted-landing/invest/images/` and are copied on seed. Also replace `name`, `overview`, `provenance`, `custody`. |
+| Real items and images | `offering.json`: `items` (title, photographer, year, description, estimate, image, caption). Image files (svg, jpg, jpeg, png, webp or avif) go in `../vaulted-landing/invest/images/`, or any folder passed with `pnpm seed --images <folder>`, and are copied on seed. The seed stops and lists any image it cannot find (section 4). Also replace `name`, `overview`, `provenance`, `custody`. |
 | Comparable sales | `offering.json`: `comps` |
-| Documents and versions | `offering.json`: `documents` (title, path, version, date), plus the real PDFs in `private/documents/` (section 6) |
+| Documents and versions | `offering.json`: `documents` (title, path, version, date), plus the real PDFs in `private/documents/` (section 6). Every document must be the real PDF: on the live server a single placeholder blocks opening, confirming documents and subscribing. |
 | E-sign URL | `offering.json`: `esign_url` (currently an example.com placeholder) |
 | Wire details | `offering.json`: `wire` (bank name, account name, account number, routing number, instructions) |
 | Contact email | `offering.json`: `contact_email`, and the FAQ answer that mentions it (both currently `hello@onvaulted.com`) |
@@ -160,11 +160,12 @@ After any edit: `pnpm seed`. Phase and close date are the only offering settings
 - **The documents acknowledgment needs JavaScript** in the investor's browser. Without it, the confirm button does not work. Almost every browser has it on.
 - **Single process.** SQLite writes go through a queue inside one running app. Run exactly one copy of the app. Running two copies against the same database file is not supported.
 - **Tests share one database.** All tests use `data/test.db` (and `data/test-documents` for PDFs) and run one after another. They cannot run in parallel, and `pnpm dev` must not be running in the same folder.
-- **Notes from DECISIONS.md (11 to 17):**
+- **Notes from DECISIONS.md (11 to 18):**
   - (11) The write queue exists because the SQLite driver froze when two writes happened at once. It goes away with Postgres.
-  - (12) Opening needs at least one verified document; acknowledging needs all of them. Run `pnpm docs:sync` after dropping in the final PDFs.
+  - (12, superseded by 18) Opening, acknowledging and subscribing all need every document verified, and in production none may be a placeholder. Run `pnpm docs:sync` after dropping in the final PDFs.
   - (13) Re-seeding overwrites the close date from the content file. Set the close date in admin only after the final seed, or set it in the content file.
   - (14) A cancelled subscription cannot be replaced by a new one; admin uses Restore.
   - (15) Admin success and error messages appear next to the button you pressed, not in the page address. Revoke asks for a second click to confirm.
   - (16) The CSV exports count toward the same admin limit as admin actions: 120 per 15 minutes per address.
   - (17) The documents folder can be changed with `DOCUMENTS_DIR`; tests use their own folder. Placeholder PDFs are marked, flagged in admin and cannot open the offering in production.
+  - (18) In production every document must be real: one placeholder blocks opening, confirming documents and subscribing. `pnpm seed --images <folder>` copies item images from another folder, and the seed stops with a list of any image it cannot find.

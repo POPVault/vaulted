@@ -126,6 +126,32 @@ export async function verifyDocumentFiles(
   return Promise.all(docs.map(checkDocumentFile));
 }
 
+export type DocumentsReadiness =
+  | { ok: true }
+  | { ok: false; code: "documents_missing" | "documents_placeholder" };
+
+/**
+ * The one rule for whether investors may act on an offering's documents
+ * (opening the offering, acknowledging, subscribing). Every listed document
+ * must exist on disk and match its stored contentHash, and there must be at
+ * least one. In production every document must also be a real document, not
+ * a generated placeholder; outside production placeholders are allowed for
+ * local work.
+ */
+export async function documentsReadyForInvestors(
+  offeringId: number,
+  executor: Executor = db,
+): Promise<DocumentsReadiness> {
+  const checks = await verifyDocumentFiles(offeringId, executor);
+  if (checks.length === 0 || checks.some((c) => !c.ok)) {
+    return { ok: false, code: "documents_missing" };
+  }
+  if (process.env.NODE_ENV === "production" && checks.some((c) => c.placeholder)) {
+    return { ok: false, code: "documents_placeholder" };
+  }
+  return { ok: true };
+}
+
 async function checkDocumentFile(doc: Document): Promise<DocumentFileCheck> {
   const base = { documentId: doc.id, filePath: doc.filePath, placeholder: false };
   if (!doc.contentHash) return { ...base, ok: false, reason: "missing_hash" };

@@ -102,12 +102,12 @@ export async function updatePhase(
   if (!result.ok) {
     if (result.code === "documents_missing") {
       return error(
-        "The offering cannot open until at least one document is on the server and verified. Add the PDFs to the documents folder and run pnpm docs:sync.",
+        "The offering cannot open until every document is on the server and verified. Add the PDFs to the documents folder and run pnpm docs:sync.",
       );
     }
     if (result.code === "documents_placeholder") {
       return error(
-        "The offering cannot open on placeholder documents. Replace them with the real PDFs and run pnpm docs:sync.",
+        "The offering cannot open while any document is a placeholder. Replace every placeholder with the real PDF and run pnpm docs:sync.",
       );
     }
     return error(NO_OFFERING);

@@ -11,7 +11,7 @@ import {
   type Phase,
   type Update,
 } from "@/db/schema";
-import { listDocuments, verifyDocumentFiles } from "./documents";
+import { documentsReadyForInvestors, listDocuments } from "./documents";
 import { listUpdates } from "./updates";
 import { DataError, type Result } from "./errors";
 import { write } from "./executor";
@@ -91,10 +91,9 @@ export async function getOfferingContent(
 }
 
 /**
- * Changes the phase. Opening requires at least one document whose file exists
- * under the documents root and matches its stored contentHash. In production
- * at least one of those must also be a real document, not a generated
- * placeholder.
+ * Changes the phase. Opening requires documentsReadyForInvestors: every
+ * listed document verified on disk, and in production none of them a
+ * generated placeholder.
  */
 export async function setPhase(
   offeringId: number,
@@ -103,13 +102,8 @@ export async function setPhase(
   Result<{ offering: Offering }, "not_found" | "documents_missing" | "documents_placeholder">
 > {
   if (phase === "open") {
-    const verified = (await verifyDocumentFiles(offeringId)).filter((c) => c.ok);
-    if (verified.length === 0) {
-      return { ok: false, code: "documents_missing" };
-    }
-    if (process.env.NODE_ENV === "production" && verified.every((c) => c.placeholder)) {
-      return { ok: false, code: "documents_placeholder" };
-    }
+    const ready = await documentsReadyForInvestors(offeringId);
+    if (!ready.ok) return ready;
   }
   const [row] = await write(() =>
     db

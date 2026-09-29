@@ -13,7 +13,7 @@ import {
   type SubscriptionStatus,
 } from "@/db/schema";
 import { latestAcknowledgment } from "./acknowledgments";
-import { computeDocumentsHash, listDocuments, verifyDocumentFiles } from "./documents";
+import { computeDocumentsHash, documentsReadyForInvestors, listDocuments } from "./documents";
 import { DataError, type Result } from "./errors";
 import { writeTransaction, type Executor, type Tx } from "./executor";
 import { getQuestionnaire } from "./questionnaires";
@@ -86,6 +86,7 @@ export type CreateSubscriptionError =
   | "acknowledgment_required"
   | "documents_updated"
   | "documents_missing"
+  | "documents_placeholder"
   | "sold_out";
 
 /**
@@ -131,10 +132,10 @@ export async function createSubscription(
     );
     if (!ack) return fail("acknowledgment_required");
 
-    const checks = await verifyDocumentFiles(input.offeringId, tx);
-    if (checks.length === 0 || checks.some((c) => !c.ok)) {
-      return fail("documents_missing");
-    }
+    // Re-checked here so an offering already marked open cannot take
+    // subscriptions on missing, changed or (in production) placeholder files.
+    const ready = await documentsReadyForInvestors(input.offeringId, tx);
+    if (!ready.ok) return fail(ready.code);
     const docs = await listDocuments(input.offeringId, tx);
     if (computeDocumentsHash(docs) !== ack.documentsHash) {
       return fail("documents_updated");

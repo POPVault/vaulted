@@ -1,15 +1,19 @@
 import { expect, test } from "@playwright/test";
-import { verifyDocumentFiles } from "@/data/documents";
+import { documentsReadyForInvestors, verifyDocumentFiles } from "@/data/documents";
 import { getOfferingById, setPhase } from "@/data/offerings";
-import { applyStatusAction } from "@/data/subscriptions";
+import { applyStatusAction, createSubscription } from "@/data/subscriptions";
 import {
+  acknowledgeCurrent,
   addQuestionnaire,
+  addTestDocument,
   addUnverifiedDocument,
   ensureOffering,
   insertSubscription,
   offeringA,
   newInvestor,
+  removeTestFile,
   resetState,
+  writeTestFile,
 } from "./helpers/db";
 
 // Business rules enforced in the data layer (PLAN.md section 5).
@@ -122,5 +126,50 @@ test("17. seeded placeholder PDFs are flagged and cannot open an offering in pro
 
   // Outside production the placeholders still open the offering for local work.
   expect((await setPhase(offering.id, "open")).ok).toBe(true);
+  await resetState();
+});
+
+test("18. in production a mixed real and placeholder document set refuses acknowledge and subscribe", async () => {
+  // The acknowledge and subscribe actions run in the dev server process, whose
+  // NODE_ENV cannot be flipped from here. Both call documentsReadyForInvestors,
+  // so the rule is tested on that function and on the createSubscription
+  // transaction directly, with NODE_ENV set in this process as test 17 does.
+  const offering = await resetState({ phase: "open", unitsOffered: 1000 });
+  const fileName = "e2e-real-document.pdf";
+  await addTestDocument(offering.id, fileName, "a real document");
+  const checks = await verifyDocumentFiles(offering.id);
+  expect(checks.some((c) => c.ok && c.placeholder)).toBe(true);
+  expect(checks.some((c) => c.ok && !c.placeholder)).toBe(true);
+
+  const investor = await newInvestor("Placeholder mix");
+  await addQuestionnaire(investor.id, offering.id);
+  await acknowledgeCurrent(investor.id, offering.id);
+  const input = { investorId: investor.id, offeringId: offering.id, units: 2, ip: "" };
+
+  const env = process.env as Record<string, string | undefined>;
+  const previous = env.NODE_ENV;
+  env.NODE_ENV = "production";
+  try {
+    // Acknowledge uses this check before recording anything.
+    expect(await documentsReadyForInvestors(offering.id)).toEqual({ ok: false, code: "documents_placeholder" });
+    // The offering is already open, yet subscribing is refused inside the transaction.
+    expect(await createSubscription(input)).toEqual({ ok: false, code: "documents_placeholder" });
+    expect(await setPhase(offering.id, "open")).toEqual({ ok: false, code: "documents_placeholder" });
+  } finally {
+    env.NODE_ENV = previous;
+  }
+
+  // Outside production the placeholders are allowed.
+  expect(await documentsReadyForInvestors(offering.id)).toEqual({ ok: true });
+
+  // A missing file refuses everywhere, in any environment.
+  removeTestFile(fileName);
+  expect(await documentsReadyForInvestors(offering.id)).toEqual({ ok: false, code: "documents_missing" });
+  expect(await createSubscription(input)).toEqual({ ok: false, code: "documents_missing" });
+
+  // Restoring the same bytes makes the set valid again outside production.
+  writeTestFile(fileName, "a real document");
+  expect((await createSubscription(input)).ok).toBe(true);
+  removeTestFile(fileName);
   await resetState();
 });

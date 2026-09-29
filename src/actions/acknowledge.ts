@@ -5,8 +5,8 @@ import { recordAcknowledgment } from "@/data/acknowledgments";
 import {
   computeDocumentsHash,
   documentsManifestJson,
+  documentsReadyForInvestors,
   listDocuments,
-  verifyDocumentFiles,
 } from "@/data/documents";
 import { findCurrentOffering } from "@/data/offerings";
 import { consume } from "@/data/rateLimit";
@@ -20,6 +20,7 @@ export type AcknowledgeErrorCode =
   | "rate_limited"
   | "invalid_input"
   | "documents_missing"
+  | "documents_placeholder"
   | "documents_updated";
 
 export type AcknowledgeResult =
@@ -31,6 +32,8 @@ const MESSAGES: Record<AcknowledgeErrorCode, string> = {
   rate_limited: "Too many attempts. Wait a few minutes and try again.",
   invalid_input: "Something went wrong. Reload the page and try again.",
   documents_missing: "The documents are not available right now. Please try again later or email us.",
+  documents_placeholder:
+    "The final offering documents are not ready yet, so they cannot be confirmed. We will let you know when they are. Questions? Email us.",
   documents_updated: "The documents were updated. Reload to review them.",
 };
 
@@ -40,8 +43,9 @@ function fail(code: AcknowledgeErrorCode): AcknowledgeResult {
 
 /**
  * Records that the investor has received and read the current offering
- * documents. The submitted hash must match the current manifest, and every
- * file must exist on disk with its stored contentHash.
+ * documents. The submitted hash must match the current manifest, and the
+ * documents must pass documentsReadyForInvestors (every file verified; in
+ * production none a placeholder).
  */
 export async function acknowledgeDocuments(input: { documentsHash: string }): Promise<AcknowledgeResult> {
   const offering = await findCurrentOffering();
@@ -55,8 +59,8 @@ export async function acknowledgeDocuments(input: { documentsHash: string }): Pr
   const parsed = acknowledgeSchema.safeParse(input);
   if (!parsed.success) return fail("invalid_input");
 
-  const checks = await verifyDocumentFiles(offering.id);
-  if (checks.length === 0 || checks.some((c) => !c.ok)) return fail("documents_missing");
+  const ready = await documentsReadyForInvestors(offering.id);
+  if (!ready.ok) return fail(ready.code);
 
   const docs = await listDocuments(offering.id);
   const documentsHash = computeDocumentsHash(docs);

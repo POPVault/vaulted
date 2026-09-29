@@ -26,6 +26,8 @@ const MESSAGES: Record<Exclude<CreateSubscriptionError, "sold_out">, string> = {
   documents_updated:
     "The offering documents were updated since you acknowledged them. Review and acknowledge the new versions, then come back.",
   documents_missing: "The offering documents are not available right now. Try again later or email us.",
+  documents_placeholder:
+    "The final offering documents are not ready yet, so we cannot take subscriptions right now. We will let you know when they are. Questions? Email us.",
 };
 
 function soldOutMessage(remaining: number): string {

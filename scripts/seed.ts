@@ -1,23 +1,43 @@
-// pnpm seed [--with-demo-investor] [--placeholder-docs]
+// pnpm seed [--with-demo-investor] [--placeholder-docs] [--images <dir>]
 //
 // Loads the offering from ../vaulted-landing/functions/invest/_content and
-// makes the database match it. Re-runnable: the offering is upserted by code
+// makes the database match it. Every image the items reference is copied from
+// ../vaulted-landing/invest/images (or --images <dir>) into
+// public/offerings/<code>/; the seed fails if one is found in neither place. Re-runnable: the offering is upserted by code
 // (phase is preserved) and its items, comps, documents and updates are
 // replaced. Investor records are never touched.
-import { copyFileSync, existsSync, mkdirSync, readdirSync, readFileSync, writeFileSync } from "node:fs";
+import { copyFileSync, existsSync, mkdirSync, readFileSync, statSync, writeFileSync } from "node:fs";
 import path from "node:path";
 import { z } from "zod";
 import { loadEnvLocal } from "./lib/env";
 
 loadEnvLocal();
 
-const args = new Set(process.argv.slice(2));
+const argv = process.argv.slice(2);
+const args = new Set(argv);
 const WITH_DEMO_INVESTOR = args.has("--with-demo-investor");
 const PLACEHOLDER_DOCS = args.has("--placeholder-docs");
 
+/** The value of `--name <value>` or `--name=<value>`, or null when absent. */
+function option(name: string): string | null {
+  for (let i = 0; i < argv.length; i++) {
+    if (argv[i] === name) {
+      const value = argv[i + 1];
+      if (!value || value.startsWith("--")) throw new Error(`${name} needs a folder, for example ${name} ./images`);
+      return value;
+    }
+    if (argv[i].startsWith(`${name}=`)) return argv[i].slice(name.length + 1);
+  }
+  return null;
+}
+
 const LANDING = path.resolve(process.cwd(), "..", "vaulted-landing");
 const CONTENT_DIR = path.join(LANDING, "functions", "invest", "_content");
-const IMAGES_DIR = path.join(LANDING, "invest", "images");
+const IMAGES_OPTION = option("--images");
+const IMAGES_DIR = IMAGES_OPTION
+  ? path.resolve(process.cwd(), IMAGES_OPTION)
+  : path.join(LANDING, "invest", "images");
+const IMAGE_EXTENSIONS = new Set([".svg", ".jpg", ".jpeg", ".png", ".webp", ".avif"]);
 const DEMO_EMAIL = "demo@example.com";
 const APP_URL = "http://localhost:3000";
 
@@ -111,20 +131,50 @@ function isoDateOrNull(value: string | null | undefined): string | null {
   return /^\d{4}-\d{2}-\d{2}$/.test(value.trim()) ? value.trim() : null;
 }
 
-function copyImages(code: string): { copied: number; present: number; source: boolean } {
+function isFile(file: string): boolean {
+  try {
+    return statSync(file).isFile();
+  } catch {
+    return false;
+  }
+}
+
+/**
+ * Copies every image the items reference from IMAGES_DIR into
+ * public/offerings/<code>/. A file missing from IMAGES_DIR is fine when it is
+ * already in the target folder. Throws, listing every problem, when an image
+ * has an unsupported extension or is found in neither place.
+ */
+function copyImages(
+  code: string,
+  imageNames: string[],
+): { copied: number; kept: number; target: string } {
   const target = path.resolve(process.cwd(), "public", "offerings", code.toLowerCase());
+  const names = [...new Set(imageNames)];
+  const unsupported = names.filter((n) => !IMAGE_EXTENSIONS.has(path.extname(n).toLowerCase()));
+  if (unsupported.length) {
+    throw new Error(
+      `Unsupported image type for: ${unsupported.join(", ")}. Use one of ${[...IMAGE_EXTENSIONS].join(", ")}.`,
+    );
+  }
+  const missing = names.filter((n) => !isFile(path.join(IMAGES_DIR, n)) && !isFile(path.join(target, n)));
+  if (missing.length) {
+    throw new Error(
+      `Missing ${missing.length === 1 ? "image" : "images"} referenced by offering items:\n` +
+        missing.map((n) => `  ${n}`).join("\n") +
+        `\nNot found in ${IMAGES_DIR}${existsSync(IMAGES_DIR) ? "" : " (folder does not exist)"}` +
+        ` or in ${target}.\nAdd the files there, or pass --images <dir> with the folder that has them.`,
+    );
+  }
   mkdirSync(target, { recursive: true });
   let copied = 0;
-  const source = existsSync(IMAGES_DIR);
-  if (source) {
-    for (const name of readdirSync(IMAGES_DIR)) {
-      if (!name.toLowerCase().endsWith(".svg")) continue;
-      copyFileSync(path.join(IMAGES_DIR, name), path.join(target, name));
-      copied++;
-    }
+  for (const name of names) {
+    const from = path.join(IMAGES_DIR, name);
+    if (!isFile(from)) continue;
+    copyFileSync(from, path.join(target, name));
+    copied++;
   }
-  const present = readdirSync(target).filter((n) => n.toLowerCase().endsWith(".svg")).length;
-  return { copied, present, source };
+  return { copied, kept: names.length - copied, target };
 }
 
 /** PDF literal string escaping. */
@@ -176,6 +226,12 @@ async function main() {
     const updatesFile = path.join(CONTENT_DIR, "updates.json");
     const source = OfferingJson.parse(readJson(offeringFile));
     const sourceUpdates = existsSync(updatesFile) ? UpdatesJson.parse(readJson(updatesFile)) : [];
+
+    // Images first, so a missing file fails the seed before the database changes.
+    const images = copyImages(
+      source.code,
+      source.items.map((item) => path.posix.basename(item.image)),
+    );
 
     await runMigrations();
 
@@ -256,8 +312,6 @@ async function main() {
       return row;
     });
 
-    const images = copyImages(source.code);
-
     const written: string[] = [];
     if (PLACEHOLDER_DOCS) {
       mkdirSync(documentsRoot(), { recursive: true });
@@ -317,9 +371,7 @@ async function main() {
       ["updates", String(await count(updates))],
       [
         "images",
-        images.source
-          ? `${images.present} svg in public${imageDir} (${images.copied} copied)`
-          : `${images.present} svg in public${imageDir} (source folder missing, kept existing)`,
+        `${images.copied + images.kept} referenced in public${imageDir} (${images.copied} copied from ${IMAGES_DIR}, ${images.kept} already present)`,
       ],
     ];
     console.log("\nSeed summary");
