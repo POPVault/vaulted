@@ -277,7 +277,7 @@ Enforced server side, in actions and the data layer. Same table as `../vaulted-l
 ### Acknowledgment
 
 - `documentsHash` = sha256 of canonical `[{ filePath, version, date, contentHash }]` (sorted by `filePath`, stable key order).
-- Before recording, every document of the offering is verified on disk: the file exists under `./private/documents` and its sha256 equals the stored `contentHash`. Any missing file, null `contentHash`, or mismatch refuses the acknowledgment with `documents_missing`.
+- Before recording, `documentsReadyForInvestors` (src/data/documents.ts) runs: the offering must have at least one document, every listed document's file must exist under the documents root and its sha256 must equal the stored `contentHash`, and in production every document must also be a real file, not a placeholder. Any missing file, null `contentHash`, or mismatch refuses with `documents_missing`; a placeholder in production refuses with `documents_placeholder`.
 - The client submits the hash rendered in the page. Mismatch returns `documents_updated`.
 - Idempotent when the latest acknowledgment has the same hash.
 - "Updated" badge when an older acknowledgment exists with a different hash.
@@ -286,14 +286,14 @@ Enforced server side, in actions and the data layer. Same table as `../vaulted-l
 
 Inside a single DB transaction:
 
-1. Re-read phase, questionnaire, latest acknowledgment hash, and units taken (sum of non-cancelled subscriptions). Recompute the current manifest `documentsHash` from the documents table and require it to equal the latest acknowledgment hash; otherwise return `documents_updated`.
+1. Re-read phase, questionnaire, latest acknowledgment hash, and units taken (sum of non-cancelled subscriptions). Re-run `documentsReadyForInvestors` (same rule as acknowledgment and opening; refuses with `documents_missing` or `documents_placeholder`), so an offering already open cannot take subscriptions on missing or placeholder files. Recompute the current manifest `documentsHash` from the documents table and require it to equal the latest acknowledgment hash; otherwise return `documents_updated`.
 2. Insert only if units <= remaining.
 3. `amountCents = units * pricePerUnitCents`.
 4. `wireReference = ${code}-${investor.code}`.
 
 ### Phase change (admin)
 
-- The admin cannot set phase to `open` unless the offering has at least one document, and at least one document's file exists under `./private/documents` and matches its stored `contentHash`. Otherwise the action returns `documents_missing` and the phase is unchanged.
+- The admin cannot set phase to `open` unless `documentsReadyForInvestors` passes: the offering has at least one document, every listed document's file exists under the documents root and matches its stored `contentHash`, and in production every document is a real file, not a placeholder. Otherwise the action returns `documents_missing` (or `documents_placeholder` for a placeholder in production) and the phase is unchanged. The same check gates acknowledgment and subscription.
 
 ### Status actions (admin)
 
@@ -363,8 +363,8 @@ funded > signed > accepted > requested > interested > none.
 1. Runs migrations.
 2. Upserts the offering by `code` from `../vaulted-landing/functions/invest/_content/offering.json`, mapping fields; TBD and null values are preserved.
 3. Replaces items, comps, documents, and updates for that offering.
-4. Computes `contentHash` (sha256) and `sizeBytes` for each document from `./private/documents/<filePath>` using the same code as `pnpm docs:sync`. Missing files leave both null (the offering then cannot open).
-5. Copies `../vaulted-landing/invest/images/*.svg` into `public/offerings/<code>/`. If the source is missing, keeps what exists.
+4. Computes `contentHash` (sha256) and `sizeBytes` for each document from `./private/documents/<filePath>` using the same code as `pnpm docs:sync`. Missing files leave both null (the offering then cannot open, and acknowledgment and subscription are refused, because every listed document must exist and match its hash).
+5. Copies every image the items reference (svg, jpg, jpeg, png, webp, avif) from `../vaulted-landing/invest/images`, or from `--images <dir>` when given, into `public/offerings/<code>/`. An image already in `public/offerings/<code>/` is kept. If a referenced image is in neither place, the seed fails before touching the database and lists the missing files.
 6. Creates nothing else.
 
 ### docs:sync
@@ -389,7 +389,7 @@ Playwright, against `pnpm dev` on a test `DATABASE_PATH` of `./data/test.db`, se
 | 8 | Revoked action | After revocation, a direct server action submission (acknowledge, interested, questionnaire, subscribe) with the old cookie is rejected and writes nothing. |
 | 9 | Cross-investor | An action cannot target another investor's records (no investor id in input is honored; records written belong to the session investor only). |
 | 10 | Offering access | An investor with access to offering A cannot read offering B's document (`/invest/documents/<B doc id>`) or page. |
-| 11 | Empty manifest | Setting phase to `open` on an offering with no documents (or no verifiable file) is refused. |
+| 11 | Empty manifest | Setting phase to `open` on an offering with no documents, or with any listed document whose file is missing or does not match its hash, is refused. |
 | 12 | Changed PDF | After changing a document's bytes: before `docs:sync`, acknowledging returns `documents_missing`; after `docs:sync`, the manifest hash changes, the prior acknowledgment no longer counts, and subscribe returns `documents_updated`. |
 | 13 | Status transitions | Out-of-order transitions are refused (e.g. `set_signed` from requested, `clear_accepted` while signed); cancel then uncancel restores the previous status. |
 | 14 | 35 cap | With 35 accepted sophisticated subscriptions, `set_accepted` for another sophisticated investor is refused, and `uncancel` of a cancelled accepted sophisticated subscription is refused. |
